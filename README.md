@@ -11,11 +11,20 @@ It is a single binary with no dependencies, and the web interface runs on **port
 - **Dashboard:** status, CPU/RAM, uptime, start/stop/restart/kill
 - **Settings:** RAM, JVM arguments (including Aikar's flags), autostart, automatic restart after a crash, password
 
+## Install
+```sh
+git clone https://github.com/alpwrk/mastermc.git && cd mastermc
+./installit            # builds and installs to /usr/local/bin/mastermc (uses sudo if needed)
+./installit --user     # installs to ~/.local/bin instead, no root required
+```
+`installit` checks for Go ≥ 1.24. If Go is missing or too old, it offers to download a temporary Go toolchain (checksum-verified) that is only used for the build.
+Other options: `--bindir DIR`, `--download-go`, `--yes`, `--uninstall`, `--help`.
+
 ## Getting started
 ```sh
-./mastermc                     # panel on http://<IP>:7777
-./mastermc --port 8080 --data /srv/mc --bind 127.0.0.1
-./mastermc --reset-password    # generate a new random password
+mastermc                       # panel on http://<IP>:7777
+mastermc --port 8080 --data /srv/mc --bind 127.0.0.1
+mastermc --reset-password      # generate a new random password
 ```
 On first start an admin password is generated. It is printed to the terminal and saved in `mastermc-data/initial-password.txt`. Change it in the settings after your first login.
 
@@ -27,10 +36,10 @@ mastermc-data/
 └── java/         Java versions installed by the panel
 ```
 
-## Building
+## Building manually
 Requires Go ≥ 1.24.
 ```sh
-./build.sh        # → dist/mastermc-linux-amd64, dist/mastermc-linux-arm64
+./build.sh        # release binaries → dist/mastermc-linux-amd64, dist/mastermc-linux-arm64
 go build .        # for the current system only
 ```
 

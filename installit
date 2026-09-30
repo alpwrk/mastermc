@@ -1,0 +1,181 @@
+#!/usr/bin/env sh
+# Builds mastermc from source and installs the binary into a bin directory.
+#
+# Usage: ./installit [options]
+#   --user          install into ~/.local/bin instead of /usr/local/bin
+#   --bindir DIR    install into DIR
+#   --download-go   always use a freshly downloaded Go toolchain
+#   -y, --yes       don't ask, answer yes to all prompts
+#   --uninstall     remove the installed binary
+#   -h, --help      show this help
+set -eu
+
+NAME=mastermc
+MIN_GO=1.24
+BINDIR=/usr/local/bin
+YES=0
+FORCE_GO=0
+UNINSTALL=0
+
+cd "$(dirname "$0")"
+
+if [ -t 2 ]; then B='\033[1m' Y='\033[33m' R='\033[31m' N='\033[0m'; else B='' Y='' R='' N=''; fi
+info() { printf "${B}==>${N} %s\n" "$*" >&2; }
+warn() { printf "${Y}warning:${N} %s\n" "$*" >&2; }
+die()  { printf "${R}error:${N} %s\n" "$*" >&2; exit 1; }
+
+usage() { sed -n '2,11s/^# \{0,1\}//p' "$0"; exit 0; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --user) BINDIR="$HOME/.local/bin" ;;
+    --bindir) [ $# -ge 2 ] || die "--bindir needs a directory"; BINDIR="$2"; shift ;;
+    --bindir=*) BINDIR="${1#*=}" ;;
+    --download-go) FORCE_GO=1 ;;
+    -y|--yes) YES=1 ;;
+    --uninstall) UNINSTALL=1 ;;
+    -h|--help) usage ;;
+    *) die "unknown option: $1 (see --help)" ;;
+  esac
+  shift
+done
+
+[ "$(uname -s)" = "Linux" ] || die "only Linux is supported"
+
+confirm() {
+  [ "$YES" -eq 1 ] && return 0
+  [ -t 0 ] || die "$1 – rerun with --yes to confirm non-interactively"
+  printf '%s [y/N] ' "$1"
+  read -r answer
+  case "$answer" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac
+}
+
+# Runs a command with sudo if the target directory is not writable.
+SUDO=""
+need_sudo() {
+  dir="$1"
+  while [ ! -d "$dir" ]; do dir=$(dirname "$dir"); done
+  if [ ! -w "$dir" ] && [ "$(id -u)" -ne 0 ]; then
+    command -v sudo >/dev/null 2>&1 || die "no write permission for $BINDIR and sudo is not available (try --user)"
+    SUDO="sudo"
+  fi
+}
+
+TARGET="$BINDIR/$NAME"
+
+if [ "$UNINSTALL" -eq 1 ]; then
+  [ -e "$TARGET" ] || die "$TARGET is not installed"
+  need_sudo "$BINDIR"
+  $SUDO rm -f "$TARGET"
+  info "Removed $TARGET"
+  exit 0
+fi
+
+# ---------- Go toolchain ----------
+
+# version_ge A B: true if version A >= version B (e.g. 1.24.3 >= 1.24)
+version_ge() {
+  [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n1)" = "$2" ]
+}
+
+go_version() {
+  "$1" env GOVERSION 2>/dev/null | sed -e 's/^go//' -e 's/[^0-9.].*$//'
+}
+
+GO=""
+if [ "$FORCE_GO" -eq 0 ] && command -v go >/dev/null 2>&1; then
+  v=$(go_version go)
+  if [ -n "$v" ] && version_ge "$v" "$MIN_GO"; then
+    GO=$(command -v go)
+    info "Using Go $v ($GO)"
+  else
+    warn "Go ${v:-unknown} is installed, but Go >= $MIN_GO is required"
+  fi
+elif [ "$FORCE_GO" -eq 0 ]; then
+  warn "Go is not installed"
+fi
+
+TMP=""
+cleanup() { [ -n "$TMP" ] && rm -rf "$TMP"; }
+trap cleanup EXIT INT TERM
+
+fetch() {
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$1"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "$1"
+  else
+    die "curl or wget is required to download Go"
+  fi
+}
+
+if [ -z "$GO" ]; then
+  case "$(uname -m)" in
+    x86_64|amd64) GOARCH_DL=amd64 ;;
+    aarch64|arm64) GOARCH_DL=arm64 ;;
+    armv6l|armv7l|armv8l) GOARCH_DL=armv6l ;;
+    i386|i686) GOARCH_DL=386 ;;
+    riscv64) GOARCH_DL=riscv64 ;;
+    ppc64le) GOARCH_DL=ppc64le ;;
+    s390x) GOARCH_DL=s390x ;;
+    *) die "unsupported architecture: $(uname -m)" ;;
+  esac
+  confirm "Download a temporary Go toolchain for building (only used for this build)?" \
+    || die "Go >= $MIN_GO is required – install it from https://go.dev/dl/ or via your package manager"
+  # The JSON API lists stable releases, newest first, with SHA256 checksums.
+  ENTRY=$(fetch "https://go.dev/dl/?mode=json" | tr -d ' \n' \
+    | grep -o "\"filename\":\"go[0-9.]*\.linux-$GOARCH_DL\.tar\.gz\"[^}]*\"sha256\":\"[0-9a-f]*\"" | head -n1) \
+    || die "could not fetch the list of Go releases from go.dev"
+  FILE=$(printf '%s' "$ENTRY" | sed 's/^"filename":"\([^"]*\)".*/\1/')
+  SUM=$(printf '%s' "$ENTRY" | sed 's/.*"sha256":"\([0-9a-f]*\)"$/\1/')
+  [ -n "$FILE" ] && [ -n "$SUM" ] || die "no Go release found for linux/$GOARCH_DL"
+  TMP=$(mktemp -d)
+  info "Downloading $FILE"
+  fetch "https://go.dev/dl/$FILE" > "$TMP/go.tar.gz" \
+    || die "failed to download https://go.dev/dl/$FILE – install Go >= $MIN_GO manually from https://go.dev/dl/"
+  if command -v sha256sum >/dev/null 2>&1; then
+    echo "$SUM  $TMP/go.tar.gz" | sha256sum -c - >/dev/null 2>&1 || die "checksum mismatch for $FILE"
+  else
+    warn "sha256sum not found, skipping checksum verification"
+  fi
+  tar -xzf "$TMP/go.tar.gz" -C "$TMP" || die "failed to extract $FILE"
+  rm -f "$TMP/go.tar.gz"
+  GO="$TMP/go/bin/go"
+  export GOROOT="$TMP/go"
+  export GOPATH="$TMP/gopath" GOCACHE="$TMP/gocache" GOMODCACHE="$TMP/gopath/pkg/mod"
+  info "Using Go $(go_version "$GO") (temporary)"
+fi
+
+# ---------- Build ----------
+
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || date +%Y.%m.%d)
+[ -n "$TMP" ] || TMP=$(mktemp -d)
+OUT="$TMP/$NAME"
+
+info "Building $NAME $VERSION"
+CGO_ENABLED=0 GOTOOLCHAIN=local "$GO" build -trimpath \
+  -ldflags "-s -w -X main.version=$VERSION" -o "$OUT" . \
+  || die "build failed"
+
+# ---------- Install ----------
+
+need_sudo "$BINDIR"
+[ -n "$SUDO" ] && info "Installing to $BINDIR requires root, using sudo"
+$SUDO mkdir -p "$BINDIR"
+$SUDO install -m 0755 "$OUT" "$TARGET"
+info "Installed $TARGET"
+
+case ":$PATH:" in
+  *":$BINDIR:"*) ;;
+  *) warn "$BINDIR is not in your PATH – add it or run $TARGET directly" ;;
+esac
+
+cat <<EOF
+
+Done. Start the panel with:
+
+  $NAME                   # web UI on http://<ip>:7777, data in ./mastermc-data
+  $NAME --data /srv/mc    # use a fixed data directory
+
+The initial admin password is printed on first start.
+EOF
