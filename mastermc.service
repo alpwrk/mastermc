@@ -1,0 +1,23 @@
+# systemd unit for headless operation.
+# Setup:
+#   sudo useradd -r -m -d /opt/mastermc mastermc
+#   sudo cp mastermc /opt/mastermc/ && sudo chown -R mastermc: /opt/mastermc
+#   sudo cp mastermc.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now mastermc
+#   sudo journalctl -u mastermc    # shows the initial admin password
+[Unit]
+Description=MasterMC Minecraft web panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mastermc
+WorkingDirectory=/opt/mastermc
+ExecStart=/opt/mastermc/mastermc --port 7777 --data /opt/mastermc/data
+Restart=on-failure
+# Give Minecraft time to shut down cleanly
+KillMode=mixed
+TimeoutStopSec=150
+
+[Install]
+WantedBy=multi-user.target

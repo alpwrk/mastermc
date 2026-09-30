@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="login-page">
+<form id="login" class="card login-card">
+  <h1>Log in</h1>
+  <p class="muted">Enter the admin password to continue.</p>
+  <label>Password
+    <input type="password" id="password" autocomplete="current-password" autofocus required>
+  </label>
+  <button class="btn primary" type="submit">Log in</button>
+  <p id="error" class="error" hidden></p>
+  <p class="muted small">On first start the password is printed to the terminal and saved in <code>initial-password.txt</code> in the data directory.</p>
+</form>
+<script src="/static/login.js"></script>
+</body>
+</html>

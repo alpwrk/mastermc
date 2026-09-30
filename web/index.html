@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <nav id="nav">
+    <button data-tab="dashboard">Dashboard</button>
+    <button data-tab="console">Console</button>
+    <button data-tab="files">Files</button>
+    <button data-tab="install">Install</button>
+    <button data-tab="java">Java</button>
+    <button data-tab="settings">Settings</button>
+  </nav>
+  <div class="topbar-right">
+    <span id="state-pill" class="pill stopped">Stopped</span>
+    <button id="logout" class="btn ghost small">Log out</button>
+  </div>
+</header>
+
+<div id="task-banner" class="task-banner" hidden>
+  <div class="task-text"><strong id="task-name"></strong> <span id="task-msg"></span></div>
+  <div class="progress"><div id="task-bar"></div></div>
+  <button id="task-close" class="btn ghost small icon-only" title="Close" data-icon="x" hidden></button>
+</div>
+
+<div id="pw-warning" class="warning" hidden>
+  You are still using the auto-generated password. <a href="#" data-goto="settings">Change it now</a>
+</div>
+
+<main>
+  <!-- Dashboard -->
+  <section id="tab-dashboard" class="tab active">
+    <div class="grid stats">
+      <div class="card stat"><div class="label">Status</div><div class="value" id="d-state">–</div></div>
+      <div class="card stat"><div class="label">Server</div><div class="value" id="d-type">–</div></div>
+      <div class="card stat"><div class="label">CPU</div><div class="value" id="d-cpu">–</div></div>
+      <div class="card stat"><div class="label">RAM (server)</div><div class="value" id="d-mem">–</div></div>
+      <div class="card stat"><div class="label">Uptime</div><div class="value" id="d-uptime">–</div></div>
+      <div class="card stat"><div class="label">Game port</div><div class="value" id="d-port">–</div></div>
+    </div>
+    <div class="card">
+      <h2>Controls</h2>
+      <div class="row gap">
+        <button class="btn primary" data-action="start" data-icon="play">Start</button>
+        <button class="btn" data-action="restart" data-icon="refresh">Restart</button>
+        <button class="btn warn" data-action="stop" data-icon="stop">Stop</button>
+        <button class="btn danger" data-action="kill" data-icon="x">Kill</button>
+      </div>
+      <p class="muted small" id="d-host"></p>
+      <p class="muted small" id="d-java"></p>
+      <div id="d-not-installed" class="notice" hidden>
+        No server installed yet. <a href="#" data-goto="install">Install one now</a>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Recent console output</h2>
+      <pre id="mini-console" class="console mini"></pre>
+    </div>
+  </section>
+
+  <!-- Console -->
+  <section id="tab-console" class="tab">
+    <div class="card console-card">
+      <div class="row between">
+        <h2>Console</h2>
+        <div class="row gap">
+          <label class="check small"><input type="checkbox" id="autoscroll" checked> Auto-scroll</label>
+          <button class="btn small" id="console-clear">Clear view</button>
+        </div>
+      </div>
+      <pre id="console" class="console"></pre>
+      <form id="cmd-form" class="row gap">
+        <input id="cmd" type="text" placeholder="Enter a command (e.g. say hello, op player, list) – without /" autocomplete="off" spellcheck="false">
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- Files -->
+  <section id="tab-files" class="tab">
+    <div class="card" id="files-card">
+      <div class="row between wrap">
+        <div id="breadcrumb" class="breadcrumb"></div>
+        <div class="row gap wrap">
+          <button class="btn small" id="f-upload" data-icon="upload">Upload files</button>
+          <button class="btn small" id="f-upload-dir" data-icon="upload">Upload folder</button>
+          <button class="btn small" id="f-newfile" data-icon="plus">File</button>
+          <button class="btn small" id="f-newdir" data-icon="plus">Folder</button>
+          <button class="btn small icon-only" id="f-refresh" title="Refresh" data-icon="refresh"></button>
+        </div>
+      </div>
+      <div id="selection-bar" class="row gap selection-bar" hidden>
+        <span id="sel-count"></span>
+        <button class="btn small" id="f-dl-sel" data-icon="download">Download (ZIP)</button>
+        <button class="btn small danger" id="f-del-sel" data-icon="trash">Delete</button>
+      </div>
+      <input type="file" id="file-input" multiple hidden>
+      <input type="file" id="dir-input" webkitdirectory multiple hidden>
+      <div id="uploads"></div>
+      <div class="table-wrap">
+        <table class="files">
+          <thead><tr>
+            <th class="c-check"><input type="checkbox" id="sel-all"></th>
+            <th>Name</th><th class="c-size">Size</th><th class="c-date">Modified</th><th class="c-actions"></th>
+          </tr></thead>
+          <tbody id="file-list"></tbody>
+        </table>
+      </div>
+      <div id="drop-hint" class="drop-hint">Drop files here to upload</div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section id="tab-install" class="tab">
+    <div class="card narrow">
+      <h2>Install server</h2>
+      <div class="segmented" id="inst-type">
+        <button data-type="vanilla" class="active">Vanilla</button>
+        <button data-type="paper">Paper</button>
+        <button data-type="custom">Download link</button>
+      </div>
+      <div id="inst-version-row">
+        <label>Version
+          <select id="inst-version"><option>Loading …</option></select>
+        </label>
+        <label class="check" id="inst-snap-row"><input type="checkbox" id="inst-snapshots"> Show snapshots</label>
+      </div>
+      <div id="inst-url-row" hidden>
+        <label>Download URL of the server jar
+          <input type="url" id="inst-url" placeholder="https://…/server.jar">
+        </label>
+        <p class="muted small">E.g. Purpur, Fabric server launcher, Velocity, … The file is saved as <code>server.jar</code>.</p>
+        <label>Required Java version
+          <select id="inst-java">
+            <option value="25">Java 25 (Minecraft 26.x+)</option>
+            <option value="21" selected>Java 21 (Minecraft 1.20.5 – 1.21.x)</option>
+            <option value="17">Java 17 (Minecraft 1.18 – 1.20.4)</option>
+            <option value="16">Java 16 (Minecraft 1.17)</option>
+            <option value="11">Java 11</option>
+            <option value="8">Java 8 (Minecraft ≤ 1.16)</option>
+          </select>
+        </label>
+      </div>
+      <label class="check"><input type="checkbox" id="inst-wipe"> Wipe the server directory first (worlds &amp; configs will be deleted!)</label>
+      <label class="check"><input type="checkbox" id="inst-eula"> I accept the <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener">Minecraft EULA</a></label>
+      <button class="btn primary" id="inst-go">Install &amp; start</button>
+      <p class="muted small">The jar is downloaded, the matching Java version is installed if needed, and the server is started once so all files get generated. Without “wipe” only the jar is replaced (= update).</p>
+    </div>
+  </section>
+
+  <!-- Java -->
+  <section id="tab-java" class="tab">
+    <div class="card">
+      <h2>Active Java for the server</h2>
+      <div class="row gap wrap">
+        <select id="java-mode"></select>
+        <button class="btn primary" id="java-mode-save">Apply</button>
+      </div>
+      <p class="muted small">“Automatic” uses the Java version matching the Minecraft version and installs it when needed.</p>
+    </div>
+    <div class="card">
+      <h2>Installed Java versions</h2>
+      <div class="table-wrap">
+        <table class="list">
+          <thead><tr><th>Version</th><th>Path</th><th>Source</th><th></th></tr></thead>
+          <tbody id="java-list"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card narrow">
+      <h2>Install Java</h2>
+      <div class="row gap wrap">
+        <select id="java-major"></select>
+        <select id="java-image">
+          <option value="jre">JRE (smaller, enough for servers)</option>
+          <option value="jdk">JDK</option>
+        </select>
+        <button class="btn primary" id="java-install">Install</button>
+      </div>
+      <p class="muted small">Eclipse Temurin from adoptium.net, installed into <code>mastermc-data/java/</code> (no root required).</p>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="tab-settings" class="tab">
+    <form class="card narrow" id="settings-form">
+      <h2>Server startup</h2>
+      <div class="row gap">
+        <label>Min. RAM (-Xms)<input id="s-minram" placeholder="1G"></label>
+        <label>Max. RAM (-Xmx)<input id="s-maxram" placeholder="4G"></label>
+      </div>
+      <label>JVM arguments
+        <textarea id="s-jvmargs" rows="3" spellcheck="false" placeholder="-XX:+UseG1GC …"></textarea>
+      </label>
+      <button type="button" class="btn small" id="s-aikar">Insert Aikar's flags</button>
+      <label>Server arguments<input id="s-serverargs" placeholder="nogui" spellcheck="false"></label>
+      <label>Jar file<input id="s-jar" placeholder="server.jar" spellcheck="false"></label>
+      <label class="check"><input type="checkbox" id="s-autostart"> Start the server automatically when the panel starts</label>
+      <label class="check"><input type="checkbox" id="s-autorestart"> Restart automatically after a crash</label>
+      <button class="btn primary" type="submit">Save</button>
+    </form>
+    <form class="card narrow" id="pw-form">
+      <h2>Change password</h2>
+      <label>Current password<input type="password" id="pw-old" autocomplete="current-password" required></label>
+      <label>New password (min. 8 characters)<input type="password" id="pw-new" autocomplete="new-password" minlength="8" required></label>
+      <label>Repeat new password<input type="password" id="pw-new2" autocomplete="new-password" minlength="8" required></label>
+      <button class="btn primary" type="submit">Change password</button>
+    </form>
+  </section>
+</main>
+
+<!-- Editor -->
+<dialog id="editor" class="editor">
+  <div class="row between">
+    <strong id="editor-title"></strong>
+    <div class="row gap">
+      <span class="muted small" id="editor-status"></span>
+      <button class="btn primary small" id="editor-save">Save (Ctrl+S)</button>
+      <button class="btn small" id="editor-close">Close</button>
+    </div>
+  </div>
+  <textarea id="editor-text" spellcheck="false" wrap="off"></textarea>
+</dialog>
+
+<!-- Generic dialog -->
+<dialog id="dialog" class="dialog">
+  <form method="dialog">
+    <p id="dialog-msg"></p>
+    <input id="dialog-input" type="text" spellcheck="false">
+    <div class="row gap end">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" value="ok" id="dialog-ok">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
